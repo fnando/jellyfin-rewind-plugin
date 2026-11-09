@@ -1,0 +1,22 @@
+---
+name: "Rewind"
+guid: "6bcfddb4-c3fb-48f6-996f-5b02d07e3e62"
+version: "0.0.0.0"
+targetAbi: "12.4.0.0"
+framework: "net10.0"
+overview: "A durable, per-user play history for every media type"
+description: >
+  Records every playback session (movies, episodes, music, audiobooks, music
+  videos, live TV and anything else Jellyfin plays) in a plugin-owned database,
+  straight from the server's playback events. Serves the history through a
+  filterable, paginated, user-scoped API and an incremental changes feed, so
+  scrobblers and trackers in the style of Trakt or Last.fm have a source of
+  truth that does not depend on webhooks.
+category: "General"
+imageUrl: "https://raw.githubusercontent.com/fnando/jellyfin-rewind-plugin/main/rewind.png"
+owner: "fnando"
+# The plugin DLL only: Jellyfin already ships EF Core and SQLite.
+artifacts:
+- "Jellyfin.Plugin.Rewind.dll"
+changelog: |
+  Initial release.

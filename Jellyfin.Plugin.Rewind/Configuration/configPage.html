@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Rewind</title>
+</head>
+<body>
+    <div id="RewindConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox,paper-icon-button-light">
+        <style>
+            #RewindConfigPage .rewindTable { border-collapse: collapse; }
+            #RewindConfigPage .rewindTable th,
+            #RewindConfigPage .rewindTable td { padding: 0.4em 1em; white-space: nowrap; }
+            #RewindConfigPage .rewindTable th:first-child,
+            #RewindConfigPage .rewindTable td:first-child { padding-left: 0; }
+            #RewindConfigPage .rewindRefresh { margin: 0; padding: 0.4em; line-height: 0; opacity: 0.85; }
+            #RewindConfigPage .rewindRefresh:hover { opacity: 1; }
+            #RewindConfigPage .rewindRefresh:disabled { cursor: default; }
+            #RewindConfigPage .rewindRefresh.loading svg { animation: rewindSpin 0.8s linear infinite; }
+            @keyframes rewindSpin { to { transform: rotate(360deg); } }
+            #RewindConfigPage .rewindTable th:last-child,
+            #RewindConfigPage .rewindTable td:last-child { padding-right: 0; }
+        </style>
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="RewindConfigForm">
+                    <h2 class="sectionTitle">Scrobble rules</h2>
+                    <p class="fieldDescription">
+                        Every playback session is recorded. These rules decide which ones count as a
+                        scrobble (what <code>/Rewind/History</code> returns by default). A play counts when it reaches the
+                        percentage of the runtime <em>or</em> the minutes actually played, whichever comes first; 0 disables
+                        either half. <em>Furthest position</em> counts resumed plays (Trakt style); <em>time played</em> only
+                        counts what was played in that session, seeks excluded (Last.fm style).
+                    </p>
+                    <table class="detailTable rewindTable" style="width: 100%; margin-bottom: 2em;">
+                        <thead>
+                            <tr><th style="text-align: left;">Media</th><th style="text-align: left;">Percentage of</th><th style="text-align: left;">Percent</th><th style="text-align: left;">Minutes</th></tr>
+                        </thead>
+                        <tbody id="RuleRows"></tbody>
+                    </table>
+
+                    <h2 class="sectionTitle">Sessions</h2>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="StaleSessionMinutes">Abandon after (minutes)</label>
+                        <input id="StaleSessionMinutes" name="StaleSessionMinutes" type="number" min="1" is="emby-input" />
+                        <div class="fieldDescription">A session that sends no progress for this long (crashed client, lost connection, no stop event) is closed as abandoned. Its scrobble is decided from what was played.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="ProgressWriteSeconds">Progress write interval (seconds)</label>
+                        <input id="ProgressWriteSeconds" name="ProgressWriteSeconds" type="number" min="0" is="emby-input" />
+                        <div class="fieldDescription">How often in-progress positions are written to disk. Starts, stops and pauses are always written right away.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input id="PurgeHistoryOnUserDelete" name="PurgeHistoryOnUserDelete" type="checkbox" is="emby-checkbox" />
+                            <span>Erase history of deleted users</span>
+                        </label>
+                        <div class="fieldDescription">When a user is deleted from Jellyfin, erase their play history too. Off by default: the history is kept.</div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
+
+                <h2 class="sectionTitle" style="margin-top: 2em;">Re-evaluate</h2>
+                <p class="fieldDescription">Changed the rules? Apply them to the history already recorded. Plays that change are announced on the changes feed.</p>
+                <button is="emby-button" type="button" id="ReevaluateButton" class="raised emby-button"><span>Re-evaluate scrobbles</span></button>
+                <span id="ReevaluateStatus" style="margin-left: 1em;"></span>
+
+                <h2 class="sectionTitle" style="margin-top: 2em;">History</h2>
+                <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 1em;">
+                    <div class="fieldDescription" id="SummaryAsOf" style="margin: 0;"></div>
+                    <button is="paper-icon-button-light" type="button" id="SummaryRefresh" class="rewindRefresh" title="Refresh history" aria-label="Refresh history">
+                        <svg viewBox="0 0 23.8598 20.1772" width="18" height="18" aria-hidden="true" focusable="false">
+                            <path fill="currentColor" d="M23.1335 8.11706L18.524 8.11706C17.8044 8.11706 17.6154 8.66365 18.0139 9.20769L20.2767 12.3682C20.5846 12.8029 21.0749 12.8029 21.3877 12.3682L23.6543 9.21466C24.0549 8.66365 23.8638 8.11706 23.1335 8.11706ZM1.84321 10.0823C1.84321 15.6531 6.36556 20.1647 11.9256 20.1647C15.1406 20.1647 18.015 18.6492 19.8677 16.2323C20.3035 15.7246 20.1987 15.0674 19.7534 14.7505C19.2743 14.4103 18.7117 14.5521 18.3164 15.0102C16.848 16.9342 14.5494 18.1831 11.9256 18.1831C7.44766 18.1831 3.8318 14.5602 3.8318 10.0823C3.8318 5.60445 7.44766 1.98162 11.9256 1.98162C16.4035 1.98162 20.0263 5.60445 20.0263 10.0882C20.0263 10.6294 20.4811 11.079 21.0258 11.079C21.5618 11.079 22.0079 10.638 22.0166 10.0969C22.0079 4.50292 17.4963 0 11.9256 0C6.36556 0 1.84321 4.51161 1.84321 10.0823Z"/>
+                        </svg>
+                    </button>
+                </div>
+                <table class="detailTable rewindTable" style="width: 100%;">
+                    <thead>
+                        <tr><th style="text-align: left;">User</th><th style="text-align: right;">Plays</th><th style="text-align: right;">Scrobbles</th><th style="text-align: left;">Last played</th></tr>
+                    </thead>
+                    <tbody id="SummaryRows"></tbody>
+                </table>
+            </div>
+        </div>
+        <script type="text/javascript">
+            var RewindConfig = {
+                pluginUniqueId: '6bcfddb4-c3fb-48f6-996f-5b02d07e3e62',
+                taskKey: 'RewindReevaluateScrobbles',
+                rules: [
+                    { key: 'Audio', label: 'Music' },
+                    { key: 'Video', label: 'Movies, episodes, videos' },
+                    { key: 'AudioBook', label: 'Audiobooks' },
+                    { key: 'LiveTv', label: 'Live TV' }
+                ]
+            };
+
+            // Measure enum: 0 = Position, 1 = Played. Accept either the number or the name.
+            function measureValue(measure) {
+                return measure === 1 || measure === 'Played' ? '1' : '0';
+            }
+
+            function renderRules(config) {
+                var body = document.querySelector('#RuleRows');
+                body.innerHTML = '';
+                RewindConfig.rules.forEach(function (rule) {
+                    var value = config[rule.key] || {};
+                    var row = document.createElement('tr');
+                    row.innerHTML =
+                        '<td></td>' +
+                        '<td><select is="emby-select" data-rule="' + rule.key + '" data-field="Measure">' +
+                        '<option value="0">Furthest position</option><option value="1">Time played</option></select></td>' +
+                        '<td><input is="emby-input" type="number" min="0" max="100" data-rule="' + rule.key + '" data-field="Percent" /></td>' +
+                        '<td><input is="emby-input" type="number" min="0" data-rule="' + rule.key + '" data-field="Minutes" /></td>';
+                    row.firstChild.textContent = rule.label;
+                    body.appendChild(row);
+                    row.querySelector('[data-field="Measure"]').value = measureValue(value.Measure);
+                    row.querySelector('[data-field="Percent"]').value = value.Percent || 0;
+                    row.querySelector('[data-field="Minutes"]').value = value.Minutes || 0;
+                });
+            }
+
+            function readRules(config) {
+                RewindConfig.rules.forEach(function (rule) {
+                    var field = function (name) {
+                        return document.querySelector('[data-rule="' + rule.key + '"][data-field="' + name + '"]').value;
+                    };
+                    config[rule.key] = {
+                        Measure: parseInt(field('Measure'), 10) || 0,
+                        Percent: Math.max(0, Math.min(100, parseInt(field('Percent'), 10) || 0)),
+                        Minutes: Math.max(0, parseInt(field('Minutes'), 10) || 0)
+                    };
+                });
+            }
+
+            // The History table refreshes on its own while the page is open and visible, and on
+            // demand with the Refresh button; only this section is fetched again.
+            var summaryRefreshMs = 30000;
+            var summaryTimer = null;
+            var summaryLoading = false;
+
+            function loadSummary() {
+                if (summaryLoading) {
+                    return;
+                }
+                summaryLoading = true;
+                var asOf = document.querySelector('#SummaryAsOf');
+                var button = document.querySelector('#SummaryRefresh');
+                button.disabled = true;
+                button.classList.add('loading');
+                var done = function () {
+                    summaryLoading = false;
+                    button.disabled = false;
+                    button.classList.remove('loading');
+                };
+                ApiClient.ajax({ type: 'GET', url: ApiClient.getUrl('Rewind/Admin/Summary'), dataType: 'json' }).then(function (rows) {
+                    done();
+                    // The table is a snapshot taken when the page loads; say when.
+                    asOf.textContent = 'As of ' + new Date().toLocaleString() + '.';
+                    var body = document.querySelector('#SummaryRows');
+                    body.innerHTML = '';
+                    if (!rows || rows.length === 0) {
+                        var empty = document.createElement('tr');
+                        empty.innerHTML = '<td colspan="4">Nothing recorded yet.</td>';
+                        body.appendChild(empty);
+                        return;
+                    }
+                    rows.forEach(function (row) {
+                        var tr = document.createElement('tr');
+                        var cells = [
+                            row.userName || row.userId,
+                            String(row.plays),
+                            String(row.scrobbles),
+                            row.lastPlayedAt ? new Date(row.lastPlayedAt).toLocaleString() : ''
+                        ];
+                        cells.forEach(function (text, index) {
+                            var td = document.createElement('td');
+                            td.textContent = text;
+                            if (index === 1 || index === 2) {
+                                td.style.textAlign = 'right';
+                            }
+                            tr.appendChild(td);
+                        });
+                        body.appendChild(tr);
+                    });
+                }, function () {
+                    done();
+                    asOf.textContent = 'Unable to load the history summary (' + new Date().toLocaleString() + '). Check the server log for details.';
+                });
+            }
+
+            function startSummaryRefresh() {
+                stopSummaryRefresh();
+                summaryTimer = setInterval(function () {
+                    if (!document.hidden) {
+                        loadSummary();
+                    }
+                }, summaryRefreshMs);
+            }
+
+            function stopSummaryRefresh() {
+                if (summaryTimer) {
+                    clearInterval(summaryTimer);
+                    summaryTimer = null;
+                }
+            }
+
+            document.querySelector('#SummaryRefresh')
+                .addEventListener('click', function () {
+                    loadSummary();
+                    startSummaryRefresh(); // the next automatic refresh counts from now
+                });
+
+            // Catch up at once when the tab comes back into view.
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden && summaryTimer) {
+                    loadSummary();
+                }
+            });
+
+            document.querySelector('#RewindConfigPage')
+                .addEventListener('pagehide', stopSummaryRefresh);
+
+            document.querySelector('#RewindConfigPage')
+                .addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(RewindConfig.pluginUniqueId).then(function (config) {
+                        renderRules(config);
+                        document.querySelector('#StaleSessionMinutes').value = config.StaleSessionMinutes;
+                        document.querySelector('#ProgressWriteSeconds').value = config.ProgressWriteSeconds;
+                        document.querySelector('#PurgeHistoryOnUserDelete').checked = config.PurgeHistoryOnUserDelete;
+                        Dashboard.hideLoadingMsg();
+                    });
+                    loadSummary();
+                    startSummaryRefresh();
+                });
+
+            document.querySelector('#RewindConfigForm')
+                .addEventListener('submit', function (e) {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(RewindConfig.pluginUniqueId).then(function (config) {
+                        readRules(config);
+                        config.StaleSessionMinutes = Math.max(1, parseInt(document.querySelector('#StaleSessionMinutes').value, 10) || 10);
+                        config.ProgressWriteSeconds = Math.max(0, parseInt(document.querySelector('#ProgressWriteSeconds').value, 10) || 0);
+                        config.PurgeHistoryOnUserDelete = document.querySelector('#PurgeHistoryOnUserDelete').checked;
+                        ApiClient.updatePluginConfiguration(RewindConfig.pluginUniqueId, config).then(function (result) {
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+                        });
+                    });
+
+                    e.preventDefault();
+                    return false;
+                });
+
+            document.querySelector('#ReevaluateButton')
+                .addEventListener('click', function () {
+                    var status = document.querySelector('#ReevaluateStatus');
+                    ApiClient.getScheduledTasks({ isHidden: false }).then(function (tasks) {
+                        var task = tasks.filter(function (t) { return t.Key === RewindConfig.taskKey; })[0];
+                        if (!task) {
+                            status.textContent = 'Task not found.';
+                            return;
+                        }
+                        ApiClient.startScheduledTask(task.Id).then(function () {
+                            status.textContent = 'Started. Progress is shown under Dashboard → Scheduled Tasks.';
+                        });
+                    });
+                });
+        </script>
+    </div>
+</body>
+</html>

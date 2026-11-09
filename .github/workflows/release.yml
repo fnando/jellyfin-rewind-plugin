@@ -1,0 +1,79 @@
+name: Release
+
+# Opens a release PR: bumps the version and changelog in build.yaml, after checking that
+# the plugin builds and its tests pass. Merging the PR runs the Publish workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v, in four parts (e.g. 0.1.0.0)"
+        required: true
+        type: string
+      changelog:
+        description: "What changed (shown in Jellyfin's plugin catalog and the release notes)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Bump to ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      CHANGELOG: ${{ inputs.changelog }}
+      DOTNET: dotnet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the version
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::\"$VERSION\" isn't a four-part version like 0.1.0.0"
+            exit 1
+          fi
+          current=$(make -s print-version)
+          if [ "$current" = "$VERSION" ]; then
+            echo "::error::build.yaml is already at $VERSION"
+            exit 1
+          fi
+          if git ls-remote --exit-code --heads origin "release/v$VERSION" >/dev/null; then
+            echo "::error::The branch release/v$VERSION already exists"
+            exit 1
+          fi
+          echo "CURRENT=$current" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Edited as text: yq would reflow the whole file. changelog must stay the last key.
+      - name: Replace the version and changelog
+        run: |
+          sed -i "s/^version: \".*\"$/version: \"$VERSION\"/" build.yaml
+          sed -i '/^changelog:/,$d' build.yaml
+          { echo "changelog: |"; printf '%s\n' "$CHANGELOG" | sed 's/^/  /'; } >> build.yaml
+          test "$(make -s print-version)" = "$VERSION"
+          test "$(yq '.changelog' build.yaml)" = "$CHANGELOG"
+          git diff
+
+      - run: make check
+
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          branch="release/v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "Release v$VERSION."
+          git push origin "$branch"
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "$branch" \
+            --title "Release v$VERSION" \
+            --body "$(printf 'Bumps Rewind from %s to %s in build.yaml.\n\nMerging publishes the release.\n\n## Changelog\n\n%s\n' "$CURRENT" "$VERSION" "$CHANGELOG")"

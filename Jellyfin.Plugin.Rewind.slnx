@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Jellyfin.Plugin.Rewind/Jellyfin.Plugin.Rewind.csproj" />
+  <Project Path="Jellyfin.Plugin.Rewind.Tests/Jellyfin.Plugin.Rewind.Tests.csproj" />
+</Solution>

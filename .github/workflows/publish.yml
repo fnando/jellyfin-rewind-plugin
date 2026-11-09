@@ -1,0 +1,99 @@
+name: Publish
+
+# Once a release PR (from the Release workflow) is merged: build the plugin zip, write the
+# repository manifest, tag the merge commit and publish a GitHub release with both.
+#
+# Jellyfin servers add https://github.com/fnando/jellyfin-rewind-plugin/releases/latest/download/manifest.json
+# as a plugin repository. Each release's manifest.json lists every version, so it carries
+# over the previous release's versions.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish
+    if: github.event.pull_request.merged && startsWith(github.head_ref, 'release/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      DOTNET: dotnet
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Read the version
+        run: |
+          version=$(make -s print-version)
+          if [ "release/v$version" != "${{ github.head_ref }}" ]; then
+            echo "::error::build.yaml says $version, but the branch is ${{ github.head_ref }}"
+            exit 1
+          fi
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "::error::v$version is already released"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - run: make check
+
+      # Fails rather than publishing a manifest that forgets the older versions.
+      - name: Download the previous manifest
+        run: |
+          mkdir -p build/previous
+          if gh release view >/dev/null 2>&1; then
+            gh release download --pattern manifest.json --dir build/previous
+          fi
+
+      - run: make package
+
+      # The package details and new version come from build.yaml; every other version is
+      # carried over from the previous manifest.
+      - name: Write the manifest
+        run: |
+          previous='[]'
+          if [ -f build/previous/manifest.json ]; then previous=$(cat build/previous/manifest.json); fi
+          yq -o=json '.' build.yaml | jq \
+            --arg url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/rewind_$VERSION.zip" \
+            --arg checksum "$(md5sum "build/rewind_$VERSION.zip" | cut -d' ' -f1)" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson previous "$previous" '
+            def trim: sub("\\s+$"; "");
+            . as $b
+            | [{
+                guid: $b.guid,
+                name: $b.name,
+                overview: ($b.overview | trim),
+                description: ($b.description | trim),
+                owner: $b.owner,
+                category: $b.category,
+                imageUrl: $b.imageUrl,
+                versions: ([{
+                  version: $b.version,
+                  changelog: ($b.changelog | trim),
+                  targetAbi: $b.targetAbi,
+                  sourceUrl: $url,
+                  checksum: $checksum,
+                  timestamp: $timestamp
+                }] + [($previous[0].versions // [])[] | select(.version != $b.version)])
+              }]' > build/manifest.json
+          jq . build/manifest.json
+
+      - name: Create the release
+        run: |
+          gh release create "v$VERSION" "build/rewind_$VERSION.zip" build/manifest.json \
+            --repo "${{ github.repository }}" \
+            --target "$SHA" \
+            --title "v$VERSION" \
+            --notes "$(yq '.changelog' build.yaml)"
