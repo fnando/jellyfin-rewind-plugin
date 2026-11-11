@@ -10,8 +10,8 @@
   <ItemGroup>
     <!-- The plugin excludes the Jellyfin runtime assemblies (provided by the server); the
          test host needs them present to load the plugin's types. -->
-    <PackageReference Include="Jellyfin.Controller" Version="12.4.0" />
-    <PackageReference Include="Jellyfin.Model" Version="12.4.0" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.2" />

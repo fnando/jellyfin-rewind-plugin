@@ -68,7 +68,7 @@ public class HistoryController : ControllerBase
     /// <param name="startedBefore">Plays started before this ISO 8601 time.</param>
     /// <param name="scrobbled"><c>true</c> (default), <c>false</c> or <c>any</c>.</param>
     /// <param name="status">Statuses: <c>active</c>, <c>completed</c>, <c>abandoned</c>.</param>
-    /// <param name="source">Sources: <c>playback</c>, <c>manual</c>.</param>
+    /// <param name="source">Sources: <c>playback</c>, <c>manual</c>, <c>scrobble</c>.</param>
     /// <param name="client">A client name.</param>
     /// <param name="deviceId">A device id.</param>
     /// <param name="order"><c>desc</c> (default) or <c>asc</c>, by start time.</param>
@@ -363,6 +363,7 @@ public class HistoryController : ControllerBase
     {
         "PLAYBACK" => PlaySource.Playback,
         "MANUAL" => PlaySource.Manual,
+        "SCROBBLE" => PlaySource.Scrobble,
         _ => null,
     };
 
@@ -406,9 +407,9 @@ public class HistoryController : ControllerBase
             return null;
         }
 
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var time))
+        if (IsoTime.TryParse(value, out var time))
         {
-            return time.UtcDateTime;
+            return time;
         }
 
         errors.Add(string.Format(CultureInfo.InvariantCulture, "{0} must be an ISO 8601 time.", name));

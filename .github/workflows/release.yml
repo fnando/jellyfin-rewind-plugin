@@ -1,3 +1,4 @@
+---
 name: Release
 
 # Opens a release PR: bumps the version and changelog in build.yaml, after checking that
@@ -27,7 +28,7 @@ jobs:
       CHANGELOG: ${{ inputs.changelog }}
       DOTNET: dotnet
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Check the version
         run: |

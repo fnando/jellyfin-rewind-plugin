@@ -18,6 +18,11 @@ public static class RequestUser
     public const string UserIdClaim = "Jellyfin-UserId";
 
     /// <summary>
+    /// The claim Jellyfin's authentication handler sets to <c>true</c> for a server API key.
+    /// </summary>
+    public const string IsApiKeyClaim = "Jellyfin-IsApiKey";
+
+    /// <summary>
     /// The role Jellyfin grants administrators and API keys.
     /// </summary>
     public const string AdministratorRole = "Administrator";
@@ -50,7 +55,7 @@ public static class RequestUser
 
         if (requested != own && !principal.IsInRole(AdministratorRole))
         {
-            return UserResolution.Fail(StatusCodes.Status403Forbidden, "Only administrators can read another user's history.");
+            return UserResolution.Fail(StatusCodes.Status403Forbidden, "Only administrators can access another user's history.");
         }
 
         if (userManager.GetUserById(requested) is null)

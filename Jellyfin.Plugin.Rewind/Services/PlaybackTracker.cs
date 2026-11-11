@@ -33,6 +33,12 @@ public sealed class PlaybackTracker : IDisposable
     public static readonly TimeSpan ManualDedupWindow = TimeSpan.FromMinutes(2);
 
     /// <summary>
+    /// How far around a reported play a scrobbled play recorded from the server's events is
+    /// taken as the same play.
+    /// </summary>
+    public static readonly TimeSpan ReportOverlapWindow = TimeSpan.FromMinutes(2);
+
+    /// <summary>
     /// How soon after a near-empty session ends a new start of the same item on the same device
     /// is taken as the client retrying, not a new play.
     /// </summary>
@@ -253,6 +259,86 @@ public sealed class PlaybackTracker : IDisposable
     }
 
     /// <summary>
+    /// Records a play a client reports after the fact. Sending the same report again (same
+    /// user, item and start second) returns the existing record, and so does a report that
+    /// overlaps a scrobbled play the server recorded from its own playback events.
+    /// </summary>
+    /// <param name="userId">The user id.</param>
+    /// <param name="item">The item.</param>
+    /// <param name="report">The reported play.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The new or existing record.</returns>
+    public async Task<ReportResult> ReportAsync(Guid userId, BaseItem item, ReportedPlay report, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(report);
+
+        // Whole seconds: a resend must match even if the client serializes the time differently.
+        var startedAt = Utc(report.StartedAt);
+        startedAt = new DateTime(startedAt.Ticks - (startedAt.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
+        var key = FormattableString.Invariant($"{userId:N}:{item.Id:N}:scrobble:{startedAt.Ticks}");
+
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (await _store.FindBySessionKeyAsync(key, cancellationToken).ConfigureAwait(false) is { } existing)
+            {
+                return new ReportResult(ReportOutcome.Duplicate, existing);
+            }
+
+            var play = new PlayRecord
+            {
+                Id = NewId(),
+                UserId = userId,
+                SessionKey = key,
+                Source = PlaySource.Scrobble,
+                Status = PlayStatus.Completed,
+                StartedAt = startedAt,
+                Client = report.Client,
+                DeviceName = report.DeviceName,
+                DeviceId = report.DeviceId,
+            };
+            _snapshotter.Apply(play, item.Id, item);
+
+            // Fill in what the client left out: without a played time, assume it played the item
+            // through (or, failing a runtime, for the whole time it reported).
+            var runtime = play.RuntimeTicks;
+            var span = report.EndedAt is { } ended ? Math.Max(0, (Utc(ended) - startedAt).Ticks) : (long?)null;
+            var played = report.PlayedTicks
+                ?? (runtime, span) switch
+                {
+                    ({ } r, { } s) => Math.Min(r, s),
+                    ({ } r, null) => r,
+                    (null, { } s) => s,
+                    _ => 0,
+                };
+            var position = report.PositionTicks ?? (runtime is { } length ? Math.Min(played, length) : played);
+            var endedAt = report.EndedAt is { } end ? Utc(end) : startedAt + TimeSpan.FromTicks(played);
+
+            play.PlayedTicks = played;
+            play.PositionTicks = position;
+            play.MaxPositionTicks = position;
+            play.PlayedToCompletion = runtime is { } total && position >= total;
+            play.LastSeenAt = endedAt;
+            play.EndedAt = endedAt;
+
+            var overlap = await _store.FindOverlappingScrobbleAsync(userId, item.Id, startedAt - ReportOverlapWindow, endedAt + ReportOverlapWindow, cancellationToken).ConfigureAwait(false);
+            if (overlap is not null)
+            {
+                return new ReportResult(ReportOutcome.Duplicate, overlap);
+            }
+
+            play.Scrobbled = ScrobblePolicy.Evaluate(play, _settings.Current);
+            await _store.InsertAsync(play, cancellationToken).ConfigureAwait(false);
+            return new ReportResult(ReportOutcome.Created, play);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
     /// Closes the sessions that went quiet for longer than <c>StaleSessionMinutes</c>.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -309,6 +395,9 @@ public sealed class PlaybackTracker : IDisposable
     }
 
     private static string NewId() => Guid.CreateVersion7().ToString("N");
+
+    private static DateTime Utc(DateTime value)
+        => DateTime.SpecifyKind(value, value.Kind == DateTimeKind.Unspecified ? DateTimeKind.Utc : value.Kind).ToUniversalTime();
 
     private static void Apply(LiveSession session, PlaybackSignal signal, DateTime now)
     {

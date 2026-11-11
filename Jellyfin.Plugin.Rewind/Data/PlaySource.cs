@@ -14,4 +14,9 @@ public enum PlaySource
     /// The user marked the item as played.
     /// </summary>
     Manual = 1,
+
+    /// <summary>
+    /// Reported by a client after the fact (for example, plays buffered while offline).
+    /// </summary>
+    Scrobble = 2,
 }

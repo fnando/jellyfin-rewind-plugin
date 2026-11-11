@@ -165,6 +165,28 @@ public sealed class HistoryStore : IHistoryStore, IDisposable
     }
 
     /// <inheritdoc />
+    public async Task<PlayRecord?> FindOverlappingScrobbleAsync(Guid userId, Guid itemId, DateTime from, DateTime to, CancellationToken cancellationToken)
+    {
+        var context = await _contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (context.ConfigureAwait(false))
+        {
+            return await context.Plays.AsNoTracking()
+                .Where(play => play.UserId == userId
+                    && play.ItemId == itemId
+                    && play.Source == PlaySource.Playback
+                    && play.Scrobbled
+                    && !play.IsDeleted
+                    && play.StartedAt <= to
+
+                    // Spelled out instead of ?? so each side keeps its own tick conversion.
+                    && (play.EndedAt >= from || (play.EndedAt == null && play.LastSeenAt >= from)))
+                .OrderBy(play => play.StartedAt)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<(IReadOnlyList<PlayRecord> Items, bool HasMore)> QueryAsync(HistoryQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);

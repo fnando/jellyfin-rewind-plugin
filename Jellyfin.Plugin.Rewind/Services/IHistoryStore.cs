@@ -80,6 +80,18 @@ public interface IHistoryStore
     Task<bool> HasRecentScrobbleAsync(Guid userId, Guid itemId, DateTime since, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Finds a scrobbled play of an item, recorded from the server's playback events, whose span
+    /// overlaps a time range.
+    /// </summary>
+    /// <param name="userId">The user id.</param>
+    /// <param name="itemId">The item id.</param>
+    /// <param name="from">The start of the range (UTC).</param>
+    /// <param name="to">The end of the range (UTC).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The record, if any.</returns>
+    Task<PlayRecord?> FindOverlappingScrobbleAsync(Guid userId, Guid itemId, DateTime from, DateTime to, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Reads a page of history.
     /// </summary>
     /// <param name="query">The query.</param>

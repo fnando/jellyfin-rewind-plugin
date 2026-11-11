@@ -341,5 +341,10 @@ public sealed class HistoryEntry
     /// </summary>
     /// <param name="source">The source.</param>
     /// <returns>The name.</returns>
-    public static string SourceName(PlaySource source) => source == PlaySource.Manual ? "manual" : "playback";
+    public static string SourceName(PlaySource source) => source switch
+    {
+        PlaySource.Manual => "manual",
+        PlaySource.Scrobble => "scrobble",
+        _ => "playback",
+    };
 }
